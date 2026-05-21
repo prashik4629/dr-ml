@@ -3,9 +3,9 @@ uvicorn[standard]
 python-dotenv
 pydantic
 pydantic-settings
-scikit-learn==1.4.2
-xgboost==2.0.3
-joblib==1.3.2
-numpy==1.26.4
-pandas==2.1.4
-imbalanced-learn==0.12.3
+scikit-learn
+xgboost
+joblib
+numpy
+pandas
+imbalanced-learn
