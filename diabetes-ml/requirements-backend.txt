@@ -10,3 +10,5 @@ numpy
 pandas
 imbalanced-learn
 shap
+matplotlib
+scipy
