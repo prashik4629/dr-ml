@@ -146,7 +146,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="section-label">Navigation</div>', unsafe_allow_html=True)
-    page = st.radio("", ["Prediction", "History", "About"],
+    page = st.radio("Navigation", ["Prediction", "History", "About"],
                     label_visibility="collapsed")
 
     st.markdown("---")
