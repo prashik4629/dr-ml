@@ -3,36 +3,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import shap
 import joblib
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
-
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import (
-    StratifiedKFold,
-    cross_validate,
-    train_test_split,
-    RandomizedSearchCV,
-)
+from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (
-    accuracy_score,
-    recall_score,
-    f1_score,
-    roc_auc_score,
-    classification_report,
-)
+from sklearn.metrics import accuracy_score, recall_score, f1_score, roc_auc_score, classification_report
 from xgboost import XGBClassifier
-from scipy.stats import randint, uniform
 
 from backend.core.config import settings
 
@@ -53,25 +33,18 @@ def load_data():
     df = pd.read_csv(settings.DATASET_PATH)
     logging.info(f"Dataset loaded — shape: {df.shape}")
 
-    zero_not_valid = [
-        "Glucose", "BloodPressure", "SkinThickness",
-        "Insulin", "BMI"
-    ]
+    zero_not_valid = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
     df[zero_not_valid] = df[zero_not_valid].replace(0, np.nan)
-    logging.info("Zero values replaced with NaN for medical columns")
 
-    # Feature Engineering
     df["BMI_Age_ratio"] = df["BMI"] / (df["Age"] + 1)
     df["Glucose_BMI"] = df["Glucose"] * df["BMI"]
     df["Insulin_Glucose_ratio"] = df["Insulin"] / (df["Glucose"] + 1)
     df["Age_Pregnancies"] = df["Age"] * df["Pregnancies"]
-    logging.info("Feature engineering completed — 4 new features added")
 
     X = df.drop(columns=[settings.TARGET_COL])
     y = df[settings.TARGET_COL]
 
     logging.info(f"Class distribution — 0: {(y==0).sum()} | 1: {(y==1).sum()}")
-
     return X, y
 
 
@@ -88,102 +61,38 @@ def get_train_test_split(X, y):
 
 def build_candidates():
     def make_pipeline(model):
-        return ImbPipeline([
+        return Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
-            ("smote", SMOTE(random_state=settings.RANDOM_STATE)),
             ("model", model),
         ])
 
-    rf = make_pipeline(RandomForestClassifier(
-        n_estimators=300,
-        max_depth=6,
-        min_samples_leaf=4,
-        random_state=settings.RANDOM_STATE,
-        n_jobs=-1,
-    ))
-
-    xgb = make_pipeline(XGBClassifier(
-        n_estimators=400,
-        max_depth=4,
-        learning_rate=0.03,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        min_child_weight=3,
-        gamma=0.1,
-        eval_metric="logloss",
-        random_state=settings.RANDOM_STATE,
-        verbosity=0,
-    ))
-
-    lr = make_pipeline(LogisticRegression(
-        C=0.5,
-        max_iter=1000,
-        random_state=settings.RANDOM_STATE,
-    ))
-
-    svc = make_pipeline(SVC(
-        C=1.0,
-        kernel="rbf",
-        probability=True,
-        random_state=settings.RANDOM_STATE,
-    ))
-
-    voting = VotingClassifier(
-        estimators=[
-            ("rf", make_pipeline(RandomForestClassifier(
-                n_estimators=300,
-                max_depth=6,
-                random_state=settings.RANDOM_STATE,
-                n_jobs=-1,
-            ))),
-            ("xgb", make_pipeline(XGBClassifier(
-                n_estimators=400,
-                max_depth=4,
-                learning_rate=0.03,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                eval_metric="logloss",
-                random_state=settings.RANDOM_STATE,
-                verbosity=0,
-            ))),
-            ("lr", make_pipeline(LogisticRegression(
-                C=0.5,
-                max_iter=1000,
-                random_state=settings.RANDOM_STATE,
-            ))),
-        ],
-        voting="soft",
-    )
-
     return {
-        "RandomForest": rf,
-        "XGBoost": xgb,
-        "LogisticRegression": lr,
-        "SVC": svc,
-        "VotingEnsemble": voting,
+        "RandomForest": make_pipeline(RandomForestClassifier(
+            n_estimators=300, max_depth=6, min_samples_leaf=4,
+            random_state=settings.RANDOM_STATE, n_jobs=-1,
+        )),
+        "XGBoost": make_pipeline(XGBClassifier(
+            n_estimators=400, max_depth=4, learning_rate=0.03,
+            subsample=0.8, colsample_bytree=0.8,
+            eval_metric="logloss",
+            random_state=settings.RANDOM_STATE, verbosity=0,
+        )),
+        "LogisticRegression": make_pipeline(LogisticRegression(
+            C=0.5, max_iter=1000,
+            random_state=settings.RANDOM_STATE,
+        )),
     }
 
 
 def run_cross_validation(candidates, X_train, y_train):
-    logging.info("Running 5-fold stratified cross validation...")
-
-    cv = StratifiedKFold(
-        n_splits=5,
-        shuffle=True,
-        random_state=settings.RANDOM_STATE,
-    )
-
+    logging.info("Running 5-fold cross validation...")
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=settings.RANDOM_STATE)
     scoring = ["accuracy", "recall", "f1", "roc_auc"]
     results = {}
 
     for name, pipeline in candidates.items():
-        cv_results = cross_validate(
-            pipeline, X_train, y_train,
-            cv=cv,
-            scoring=scoring,
-            return_train_score=False,
-        )
+        cv_results = cross_validate(pipeline, X_train, y_train, cv=cv, scoring=scoring)
         results[name] = {
             "accuracy": cv_results["test_accuracy"].mean(),
             "recall":   cv_results["test_recall"].mean(),
@@ -197,7 +106,6 @@ def run_cross_validation(candidates, X_train, y_train):
             f"F1: {results[name]['f1']:.4f} | "
             f"ROC-AUC: {results[name]['roc_auc']:.4f}"
         )
-
     return results
 
 
@@ -209,7 +117,6 @@ def select_best_model(cv_results, candidates):
 
 def evaluate_on_test(pipeline, X_train, y_train, X_test, y_test):
     pipeline.fit(X_train, y_train)
-
     y_pred  = pipeline.predict(X_test)
     y_proba = pipeline.predict_proba(X_test)[:, 1]
 
@@ -225,49 +132,7 @@ def evaluate_on_test(pipeline, X_train, y_train, X_test, y_test):
     logging.info(f"Test F1       : {metrics['f1']:.4f}")
     logging.info(f"Test ROC-AUC  : {metrics['roc_auc']:.4f}")
     logging.info("\n" + classification_report(y_test, y_pred))
-
     return pipeline, metrics
-
-
-def generate_shap(pipeline, X_train, best_name):
-    if best_name in ["VotingEnsemble", "SVC"]:
-        logging.info(f"SHAP skipped — {best_name} not supported by TreeExplainer")
-        return None
-
-    logging.info("Generating SHAP values...")
-
-    try:
-        model = pipeline.named_steps["model"]
-        X_transformed = pipeline[:-1].transform(X_train)
-
-        if hasattr(X_transformed, "toarray"):
-            X_transformed = X_transformed.toarray()
-
-        explainer   = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_transformed)
-
-        feature_names = (
-            X_train.columns.tolist()
-            if hasattr(X_train, "columns")
-            else [f"f{i}" for i in range(X_transformed.shape[1])]
-        )
-
-        plt.figure()
-        shap.summary_plot(
-            shap_values if isinstance(shap_values, list) else shap_values,
-            X_transformed,
-            feature_names=feature_names,
-            show=False,
-            plot_type="bar",
-        )
-
-        shap_path = settings.PROJECT_ROOT / settings.MODEL_DIR / "shap_summary.png"
-        plt.savefig(shap_path, bbox_inches="tight", dpi=150)
-        plt.close()
-        logging.info(f"SHAP saved to {shap_path}")
-
-    except Exception as e:
-        logging.warning(f"SHAP generation failed: {e}")
 
 
 def save_model(pipeline):
@@ -286,8 +151,6 @@ def train_model():
     cv_results                       = run_cross_validation(candidates, X_train, y_train)
     best_name, best                  = select_best_model(cv_results, candidates)
     best, metrics                    = evaluate_on_test(best, X_train, y_train, X_test, y_test)
-
-    generate_shap(best, X_train, best_name)
     save_model(best)
 
     logging.info("=== Training Pipeline Completed ===")
