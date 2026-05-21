@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: diabetes-ml-api
+    runtime: python
+    buildCommand: pip install --upgrade pip && pip install -r requirements-backend.txt && python -m backend.training
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PROJECT_ROOT
+        value: /opt/render/project/src/diabetes-ml
+      - key: API_KEY
+        value: drml-dev-key-change-in-production
