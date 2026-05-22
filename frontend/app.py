@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
@@ -311,37 +312,44 @@ html, body, [class*="css"] {
     text-transform: uppercase !important;
 }
 
-/* ── Radio Buttons ── */
-.stRadio > div {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
+/* ── Radio Buttons — pill/tab style ── */
+div[role="radiogroup"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
 }
-.stRadio [data-testid="stWidgetLabel"] {
-    display: none;
-}
-.stRadio label {
+div[role="radiogroup"] label {
     background: rgba(0,255,200,0.04) !important;
-    border: 1px solid rgba(0,255,200,0.15) !important;
+    border: 1px solid rgba(0,255,200,0.18) !important;
     border-radius: 8px !important;
-    padding: 0.5rem 1.4rem !important;
+    padding: 0.45rem 1.2rem !important;
     font-family: var(--font-mono) !important;
-    font-size: 0.78rem !important;
-    color: var(--text-sub) !important;
-    letter-spacing: 0.08em;
-    cursor: pointer;
+    font-size: 0.76rem !important;
+    color: #3d7a70 !important;
+    letter-spacing: 0.08em !important;
+    cursor: pointer !important;
     transition: all 0.2s ease !important;
 }
-.stRadio label:hover {
+div[role="radiogroup"] label:hover {
     border-color: var(--cyan) !important;
     color: var(--cyan) !important;
-    box-shadow: 0 0 12px rgba(0,255,200,0.12) !important;
+    box-shadow: 0 0 14px rgba(0,255,200,0.15) !important;
+    background: rgba(0,255,200,0.07) !important;
 }
-.stRadio [aria-checked="true"] + div label,
-.stRadio label[data-checked="true"] {
+div[role="radiogroup"] label:has(input:checked) {
     border-color: var(--cyan) !important;
     color: var(--cyan) !important;
-    background: rgba(0,255,200,0.08) !important;
+    background: rgba(0,255,200,0.1) !important;
+    box-shadow: 0 0 18px rgba(0,255,200,0.18) !important;
+}
+/* Hide the actual radio circle dot */
+div[role="radiogroup"] input[type="radio"] {
+    display: none !important;
+}
+div[role="radiogroup"] [data-testid="stMarkdownContainer"] p {
+    font-family: var(--font-mono) !important;
+    font-size: 0.76rem !important;
+    margin: 0 !important;
 }
 
 /* ── Submit Button ── */
@@ -549,70 +557,74 @@ hr { border-color: rgba(0,255,200,0.08) !important; margin: 1.8rem 0 !important;
 </style>
 """, unsafe_allow_html=True)
 
-# ── Animated Canvas Background via JS (injected via components) ──
-st.markdown("""
-<div id="particles-bg" style="
-    position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
-">
-<canvas id="pcv" style="width:100%;height:100%;"></canvas>
-</div>
+# ── Animated Particle Canvas — injected via components.html into parent DOM ──
+components.html("""
 <script>
 (function(){
-const c = document.getElementById('pcv');
-if(!c) return;
-const ctx = c.getContext('2d');
-let W, H, pts = [];
+  // Inject a canvas into the PARENT window (Streamlit host page)
+  var parent = window.parent || window;
+  var doc = parent.document;
 
-function resize(){
-    W = c.width  = window.innerWidth;
-    H = c.height = window.innerHeight;
-}
-resize();
-window.addEventListener('resize', resize);
+  // Remove old canvas if rerun
+  var old = doc.getElementById('drml-particles');
+  if(old) old.remove();
 
-for(let i=0;i<55;i++){
+  var wrapper = doc.createElement('div');
+  wrapper.id = 'drml-particles';
+  wrapper.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;';
+
+  var c = doc.createElement('canvas');
+  c.style.cssText = 'width:100%;height:100%;display:block;';
+  wrapper.appendChild(c);
+  doc.body.appendChild(wrapper);
+
+  var ctx = c.getContext('2d');
+  var W, H, pts = [];
+
+  function resize(){
+    W = c.width  = parent.innerWidth;
+    H = c.height = parent.innerHeight;
+  }
+  resize();
+  parent.addEventListener('resize', resize);
+
+  for(var i=0;i<60;i++){
     pts.push({
-        x: Math.random()*2000,
-        y: Math.random()*1200,
-        vx: (Math.random()-.5)*0.25,
-        vy: (Math.random()-.5)*0.25,
-        r: Math.random()*1.4+0.4
+      x: Math.random()*W, y: Math.random()*H,
+      vx: (Math.random()-.5)*0.3, vy: (Math.random()-.5)*0.3,
+      r: Math.random()*1.5+0.4
     });
-}
+  }
 
-function draw(){
+  function draw(){
     ctx.clearRect(0,0,W,H);
-    // Draw connections
-    for(let i=0;i<pts.length;i++){
-        for(let j=i+1;j<pts.length;j++){
-            const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
-            const d=Math.sqrt(dx*dx+dy*dy);
-            if(d<160){
-                ctx.beginPath();
-                ctx.strokeStyle=`rgba(0,255,200,${(1-d/160)*0.12})`;
-                ctx.lineWidth=0.6;
-                ctx.moveTo(pts[i].x,pts[i].y);
-                ctx.lineTo(pts[j].x,pts[j].y);
-                ctx.stroke();
-            }
+    for(var i=0;i<pts.length;i++){
+      for(var j=i+1;j<pts.length;j++){
+        var dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+        var d=Math.sqrt(dx*dx+dy*dy);
+        if(d<170){
+          ctx.beginPath();
+          ctx.strokeStyle='rgba(0,255,200,'+(((1-d/170)*0.13))+')';
+          ctx.lineWidth=0.7;
+          ctx.moveTo(pts[i].x,pts[i].y);
+          ctx.lineTo(pts[j].x,pts[j].y);
+          ctx.stroke();
         }
-        // Move
-        pts[i].x+=pts[i].vx;
-        pts[i].y+=pts[i].vy;
-        if(pts[i].x<0||pts[i].x>W) pts[i].vx*=-1;
-        if(pts[i].y<0||pts[i].y>H) pts[i].vy*=-1;
-        // Draw dot
-        ctx.beginPath();
-        ctx.arc(pts[i].x,pts[i].y,pts[i].r,0,Math.PI*2);
-        ctx.fillStyle='rgba(0,255,200,0.5)';
-        ctx.fill();
+      }
+      pts[i].x+=pts[i].vx; pts[i].y+=pts[i].vy;
+      if(pts[i].x<0||pts[i].x>W) pts[i].vx*=-1;
+      if(pts[i].y<0||pts[i].y>H) pts[i].vy*=-1;
+      ctx.beginPath();
+      ctx.arc(pts[i].x,pts[i].y,pts[i].r,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,255,200,0.55)';
+      ctx.fill();
     }
     requestAnimationFrame(draw);
-}
-draw();
+  }
+  draw();
 })();
 </script>
-""", unsafe_allow_html=True)
+""", height=0)
 
 # ══════════════════════════════════════════
 # SESSION STATE
